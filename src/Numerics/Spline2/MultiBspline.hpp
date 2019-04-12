@@ -157,17 +157,13 @@ KOKKOS_INLINE_FUNCTION void MultiBspline<T>::evaluate_v(const TeamType& team,
   compute_prefactors(b, ty);
   compute_prefactors(c, tz);
 
-  const intptr_t xs = spline_m->x_stride;
-  const intptr_t ys = spline_m->y_stride;
-  const intptr_t zs = spline_m->z_stride;
-
   constexpr T zero(0);
   ASSUME_ALIGNED(vals);
   //std::fill() not OK with CUDA
   //
   //std::fill(vals, vals + num_splines, zero);
-  for (size_t i = 0; i < num_splines; i++)
-    vals[i] = T();
+  //for (size_t i = 0; i < num_splines; i++)
+  //  vals[i] = T();
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines),
                        [&](const int& i) { vals[i] = T(); });
 
@@ -176,14 +172,15 @@ KOKKOS_INLINE_FUNCTION void MultiBspline<T>::evaluate_v(const TeamType& team,
     for (size_t j = 0; j < 4; j++)
     {
       const T pre00           = a[i] * b[j];
-      const T* restrict coefs = spline_m->coefs + ((ix + i) * xs + (iy + j) * ys + iz * zs);
-      ASSUME_ALIGNED(coefs);
-      //#pragma omp simd
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines), [&](const int& n) {
-        vals[n] += pre00 *
-            (c[0] * coefs[n] + c[1] * coefs[n + zs] + c[2] * coefs[n + 2 * zs] +
-             c[3] * coefs[n + 3 * zs]);
-      });
+	  vals[n] += pre00 * 
+	    (c[0] * spline_m->coefs_view(ix+i,iy+j,iz,n) +
+	     c[1] * spline_m->coefs_view(ix+i,iy+j,iz+1,n) +
+	     c[2] * spline_m->coefs_view(ix+i,iy+j,iz+2,n) +
+	     c[3] * spline_m->coefs_view(ix+i,iy+j,iz+3,n));
+	});
+      
+
     }
 }
 
