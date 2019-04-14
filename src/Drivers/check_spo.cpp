@@ -155,7 +155,8 @@ int main(int argc, char** argv)
 
     OHMMS_PRECISION ratio = 0.0;
 
-    using spo_type = einspline_spo<OHMMS_PRECISION>;
+    //    using spo_type = einspline_spo<OHMMS_PRECISION>;
+    using spo_type = einspline_spo<OHMMS_PRECISION, 128>
     spo_type spo_main;
     using spo_ref_type = miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>;
     spo_ref_type spo_ref_main;
@@ -187,7 +188,7 @@ int main(int argc, char** argv)
       app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
                     << SPO_coeff_size_MB << " MB)" << endl;
 
-      spo_main.set(nx, ny, nz, norb, nTiles);
+      spo_main.set(nx, ny, nz, norb);
       spo_main.Lattice.set(lattice_b);
       spo_ref_main.set(nx, ny, nz, norb, nTiles);
       spo_ref_main.Lattice.set(lattice_b);
@@ -225,7 +226,8 @@ int main(int argc, char** argv)
       // create pseudopp
       NonLocalPP<OHMMS_PRECISION> ecp(random_th);
       // create spo per thread
-      spo_type spo(spo_main, team_size, member_id);
+      // don't need to do this any more
+      //spo_type spo(spo_main, team_size, member_id);
       spo_ref_type spo_ref(spo_ref_main, team_size, member_id);
 
       // use teams
@@ -255,25 +257,35 @@ int main(int argc, char** argv)
         for (int iel = 0; iel < nels; ++iel)
         {
           PosType pos = els.R[iel] + sqrttau * delta[iel];
-          spo.evaluate_vgh(pos);
+	  spo_main.evaluate_vgh(pos);
+          //spo.evaluate_vgh(pos);
           spo_ref.evaluate_vgh(pos);
           // accumulate error
-          for (int ib = 0; ib < spo.nBlocks; ib++)
-            for (int n = 0; n < spo.nSplinesPerBlock; n++)
+
+	  auto psiView = Kokkos::create_mirror_view(spo_main.psi);
+	  auto gradView = Kokkos::create_mirror_view(spo_main.grad);
+	  auto hessView = Kokkos::create_mirror_view(spo_main.hess);
+	  Kokkos::deep_copy(psiView, spo_main.psi);
+	  Kokkos::deep_copy(gradView, spo_main.grad);
+	  Kokkos::deep_copy(hessView, spo_main.hess);
+	  
+          for (int ib = 0; ib < spo_ref.nBlocks; ib++)
+            for (int n = 0; n < spo_ref.nSplinesPerBlock; n++)
             {
+	      int spNum = ib*spo_ref.nSplinesPerBlock+n;
               // value
-              evalVGH_v_err += std::fabs(spo.psi[ib][n] - spo_ref.psi[ib][n]);
+	      evalVGH_v_err += std::fabs(psiView(spNum) - spo_ref.psi[ib][n]);
               // grad
-              evalVGH_g_err += std::fabs(spo.grad[ib](n, 0) - spo_ref.grad[ib](n, 0));
-              evalVGH_g_err += std::fabs(spo.grad[ib](n, 1) - spo_ref.grad[ib](n, 1));
-              evalVGH_g_err += std::fabs(spo.grad[ib](n, 2) - spo_ref.grad[ib](n, 2));
+	      evalVGH_g_err += std::fabs(gradView(spNum, 0) - spo_ref.grad[ib](n, 0));
+	      evalVGH_g_err += std::fabs(gradView(spNum, 1) - spo_ref.grad[ib](n, 1));
+	      evalVGH_g_err += std::fabs(gradView(spNum, 2) - spo_ref.grad[ib](n, 2));
               // hess
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 0) - spo_ref.hess[ib](n, 0));
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 1) - spo_ref.hess[ib](n, 1));
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 2) - spo_ref.hess[ib](n, 2));
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 3) - spo_ref.hess[ib](n, 3));
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 4) - spo_ref.hess[ib](n, 4));
-              evalVGH_h_err += std::fabs(spo.hess[ib](n, 5) - spo_ref.hess[ib](n, 5));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 0) - spo_ref.hess[ib](n, 0));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 1) - spo_ref.hess[ib](n, 1));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 2) - spo_ref.hess[ib](n, 2));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 3) - spo_ref.hess[ib](n, 3));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 4) - spo_ref.hess[ib](n, 4));
+	      evalVGH_h_err += std::fabs(hessView(spNum, 5) - spo_ref.hess[ib](n, 5));
             }
           if (ur[iel] > accept)
           {
@@ -296,12 +308,16 @@ int main(int argc, char** argv)
             for (int k = 0; k < nknots; k++)
             {
               PosType pos = centerP + r * rOnSphere[k];
-              spo.evaluate_v(pos);
+	      spo_main.evaluate_v(pos);
+              //spo.evaluate_v(pos);
               spo_ref.evaluate_v(pos);
               // accumulate error
-              for (int ib = 0; ib < spo.nBlocks; ib++)
-                for (int n = 0; n < spo.nSplinesPerBlock; n++)
-                  evalV_v_err += std::fabs(spo.psi[ib][n] - spo_ref.psi[ib][n]);
+	      auto psiView = Kokkos::create_mirror_view(spo_main.psi);
+	      Kokkos::deep_copy(psiView, spo_main.psi);
+	      
+              for (int ib = 0; ib < spo_ref.nBlocks; ib++)
+                for (int n = 0; n < spo_ref.nSplinesPerBlock; n++)
+		  evalV_v_err += std::fabs(psiView(ib*spo_ref.nSplinesPerBlock+n) - spo_ref.psi[ib][n]);
             }
           } // els
         }   // ions

@@ -40,7 +40,7 @@ public:
   /// operates on a single walker
   /// evaluating SPOs
   virtual void evaluate_v(const PosType& p)   = 0;
-  virtual void evaluate_vgl(const PosType& p) = 0;
+  //virtual void evaluate_vgl(const PosType& p) = 0;
   virtual void evaluate_vgh(const PosType& p) = 0;
 
   /// operates on multiple walkers
