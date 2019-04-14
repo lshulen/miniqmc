@@ -156,7 +156,7 @@ int main(int argc, char** argv)
     OHMMS_PRECISION ratio = 0.0;
 
     //    using spo_type = einspline_spo<OHMMS_PRECISION>;
-    using spo_type = einspline_spo<OHMMS_PRECISION, 128>
+    using spo_type = einspline_spo<OHMMS_PRECISION, 128>;
     spo_type spo_main;
     using spo_ref_type = miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>;
     spo_ref_type spo_ref_main;

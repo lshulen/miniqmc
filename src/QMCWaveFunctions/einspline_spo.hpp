@@ -33,7 +33,7 @@ struct einspline_spo : public SPOSet
 {
   // Eventually need to define a layout that includes the blocking on groups of splines
   // which is the first dimension in this case and the v, g and h containers
-  using spline_type     = typename multi_UBspline<T, blockSize, 3>::SplineType;
+  using spline_type     = multi_UBspline<T, blockSize, 3>;
   using vContainer_type = Kokkos::View<T*>;
   using gContainer_type = Kokkos::View<T * [3], Kokkos::LayoutLeft>;
   using hContainer_type = Kokkos::View<T * [6], Kokkos::LayoutLeft>;
@@ -43,7 +43,7 @@ struct einspline_spo : public SPOSet
   int nSplines;
   
   lattice_type Lattice;
-  SplineType spline;
+  spline_type spline;
   
   vContainer_type psi;
   gContainer_type grad;
@@ -54,9 +54,7 @@ struct einspline_spo : public SPOSet
 
   /// default constructor
   einspline_spo()
-      : nSplinesSerialThreshold_V(512),
-        nSplinesSerialThreshold_VGH(128),
-        nSplines(0),
+      : nSplines(0)
   {
     timer = TimerManager.createTimer("Single-Particle Orbitals", timer_level_fine);
   }
@@ -113,7 +111,7 @@ struct einspline_spo : public SPOSet
   {
     ScopedTimer local_timer(timer);
     auto u = Lattice.toUnit_floor(p);
-    spline.evaluate_v(u[0], u[1], u[2], psi, grad, hess);
+    spline.evaluate_vgh(u[0], u[1], u[2], psi, grad, hess);
   }
 
   void print(std::ostream& os)

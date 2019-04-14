@@ -6,28 +6,28 @@
 
 // at first crack just use LayoutLeft
 // later will want to experiment with a tiled layout with
-// a static tile size (32, 64 etc)
+// a static tile size (32, 64, etc)
 
 // could imagine a specialization for complex types
 // that split the coefficients into real and imaginary parts
 namespace qmcplusplus
 {
 
-template<typename p>
-void doEval_v(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p****> coefs,
-	      Kokkos::View<double[3]> gridStarts, Kokkos::View<double[3]>delta_invs,
-	      Kokkos::View<p[16]> A44, int blockSize = 32);
+template<typename p, typename valType, typename coefType>
+void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
+	      Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
+	      Kokkos::View<p[16]>& A44, int blockSize = 32);
 
-template<typename p>
-void doEval_vgh(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p*[3]> grad,
-		Kokkos::View<p*[6]> hess, Kokkos::View<p****> coefs,
-		Kokkos::View<double[3]> gridStarts, Kokkos::View<double[3]>delta_invs,
-		Kokkos::View<p[16]> A44, Kokkos::View<p[16], dA44,
-		Kokkos::View<p[16]> d2A44, int blockSize = 32);
+template<typename p, typename valType, typename gradType, typename hessType,typename coefType>
+void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
+		hessType& hess, coefType& coefs,
+		Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
+		Kokkos::View<p[16]>& A44, Kokkos::View<p[16]>& dA44,
+		Kokkos::View<p[16]>& d2A44, int blockSize = 32);
 
 
 
-template<precision p, dims d>
+template<typename p, int d>
 struct multi_UBspline_base {
   // for bc_codes, 0 == periodic, 1 == deriv1,   2 == deriv2
   //               3 == flat    , 4 == natural,  5 == antiperiodic
@@ -35,8 +35,8 @@ struct multi_UBspline_base {
   Kokkos::View<int[d]> right_bc_codes;
   Kokkos::View<p[d]> left_values;
   Kokkos::View<p[d]> right_values;
-  Kokoks::View<double[d]> gridStarts;
-  Kokoks::View<double[d]> gridEnds;
+  Kokkos::View<double[d]> gridStarts;
+  Kokkos::View<double[d]> gridEnds;
   Kokkos::View<double[d]> deltas;
   Kokkos::View<double[d]> delta_invs;
 
@@ -45,31 +45,31 @@ protected:
 		       std::vector<double> end_locs,
 		       std::vector<int> num_pts,
 		       int boundary_condition_code) {
-    assert(start_locs.size() == dims);
-    assert(end_locs.size() == dims);
+    assert(start_locs.size() == d);
+    assert(end_locs.size() == d);
     
-    spline.left_bc_codes = Kokkos::View<int[dims]>("left_bc_codes");
-    spline.right_bc_codes = Kokkos::View<int[dims]>("right_bc_codes");
-    spline.left_values = Kokkos::View<p[dims]>("left_values");
-    spline.right_values = Kokkos::View<p[dims]>("right_values");
-    spline.gridStarts = Kokkos::View<double[dims]>("gridStarts");
-    spline.gridEnds = Kokkos::View<double[dims]>("gridEnds");
-    spline.deltas = Kokkos::View<double[dims]>("deltas");
-    spline.delta_invs = Kokkos::View<double[dims]>("delta_invs");
+    left_bc_codes = Kokkos::View<int[d]>("left_bc_codes");
+    right_bc_codes = Kokkos::View<int[d]>("right_bc_codes");
+    left_values = Kokkos::View<p[d]>("left_values");
+    right_values = Kokkos::View<p[d]>("right_values");
+    gridStarts = Kokkos::View<double[d]>("gridStarts");
+    gridEnds = Kokkos::View<double[d]>("gridEnds");
+    deltas = Kokkos::View<double[d]>("deltas");
+    delta_invs = Kokkos::View<double[d]>("delta_invs");
     
-    auto lbcMirror = Kokkos::create_mirror_view(spline.left_bc_codes);
-    auto rbcMirror = Kokkos::create_mirror_view(spline.right_bc_codes);
-    auto gsMirror = Kokkos::create_mirror_view(spline.gridStarts);
-    auto geMirror = Kokkos::create_mirror_view(spline.gridEnds);
-    auto gdMirror = Kokkos::create_mirror_view(spline.deltas);
-    auto gdinvMirror = Kokkos::create_mirror_view(spline.delta_invs);
+    auto lbcMirror = Kokkos::create_mirror_view(left_bc_codes);
+    auto rbcMirror = Kokkos::create_mirror_view(right_bc_codes);
+    auto gsMirror = Kokkos::create_mirror_view(gridStarts);
+    auto geMirror = Kokkos::create_mirror_view(gridEnds);
+    auto gdMirror = Kokkos::create_mirror_view(deltas);
+    auto gdinvMirror = Kokkos::create_mirror_view(delta_invs);
     
     std::vector<int> nx;  
-    for (int i = 0; i < dims; i++) {
+    for (int i = 0; i < d; i++) {
       lbcMirror(i) = boundary_condition_code;
       rbcMirror(i) = boundary_condition_code;
-      gsMirror(i) = start_loc[i];
-      geMirror(i) = end_loc[i];
+      gsMirror(i) = start_locs[i];
+      geMirror(i) = end_locs[i];
       
       nx.push_back(0);
       // if periodic or antiperiodic
@@ -83,33 +83,33 @@ protected:
       gdinvMirror(i) = 1.0 / delta;
     }
     
-    Kokkos::deep_copy(spline.left_bc_codes, lbcMirror);
-    Kokkos::deep_copy(spline.right_bc_codes, rbcMirror);
-    Kokkos::deep_copy(spline.gridStarts, gsMirror);
-    Kokkos::deep_copy(spline.gridEnds, geMirror);
-    Kokkos::deep_copy(spline.deltas, gdMirror);
-    Kokkos::deep_copy(spline.delta_invs, gdinvMirror);
+    Kokkos::deep_copy(left_bc_codes, lbcMirror);
+    Kokkos::deep_copy(right_bc_codes, rbcMirror);
+    Kokkos::deep_copy(gridStarts, gsMirror);
+    Kokkos::deep_copy(gridEnds, geMirror);
+    Kokkos::deep_copy(deltas, gdMirror);
+    Kokkos::deep_copy(delta_invs, gdinvMirror);
   }
 };  
 
 
-template<precision p, int blocksize, int d>
+template<typename p, int blocksize, int d>
 struct multi_UBspline : public multi_UBspline_base<p,d> {};
 
-template<precision p, int blocksize>
+template<typename p, int blocksize>
 struct multi_UBspline<p, blocksize, 1> : public multi_UBspline_base<p,1> {
   using layout = Kokkos::LayoutRight;
   using coef_t = Kokkos::View<p**, layout>; // x, splines
   coef_t coef;
 
   using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), 0));
-  using single_coef_mirror_t = single_coef_t::HostMirror;
+  using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
 
   void initialize(std::vector<int>& dvec, std::vector<double>& start,
 		  std::vector<double>& end, int bcCode, int numSpo) {
-    initializeBase(start, end, dvec, 0);
+    this->initialize_base(start, end, dvec, 0);
     initializeCoefs(dvec, numSpo);
   }
   
@@ -119,41 +119,41 @@ struct multi_UBspline<p, blocksize, 1> : public multi_UBspline_base<p,1> {
     single_coef_mirror = Kokkos::create_mirror_view(single_coef);
   }
   void pushCoefToDevice() {
-    Kokkos::deep_copy(single_coef, single_coef_mirrror);
+    Kokkos::deep_copy(single_coef, single_coef_mirror);
   }
  private:
   void initializeCoefs(std::vector<int>& dvec, int numSpo) {
     assert(dvec.size() == 1);
     std::vector<int> nx(dvec.begin(), dvec.end());
     
-    auto lbcMirror = Kokkos::create_mirror_view(left_bc_codes);
-    Kokkos::deep_copy(lbcMirror, left_bc_codes);
+    auto lbcMirror = Kokkos::create_mirror_view(this->left_bc_codes);
+    Kokkos::deep_copy(lbcMirror, this->left_bc_codes);
     for (int i = 0; i < 1; i++) {
       if (lbcMirror(i) == 0 || lbcMirror(i) == 5) {
-	sz[i] += 3;
+	nx[i] += 3;
       } else {
-	sz[i] += 2;
+	nx[i] += 2;
       }
     }
-    coefs = coef_t("coefs", sz[0], numSpo);
+    coef = coef_t("coefs", nx[0], numSpo);
   }
 
 };
 
-template<precision p, int blocksize>
+template<typename p, int blocksize>
 struct multi_UBspline<p, blocksize, 2> : public multi_UBspline_base<p,2> {
   using layout = Kokkos::LayoutRight;
   using coef_t = Kokkos::View<p***, layout>; // x, y, splines
   coef_t coef;
 
   using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), 0));
-  using single_coef_mirror_t = single_coef_t::HostMirror;
+  using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
 
   void initialize(std::vector<int>& dvec, std::vector<double>& start,
 		  std::vector<double>& end, int bcCode, int numSpo) {
-    initializeBase(start, end, dvec, 0);
+    this->initialize_base(start, end, dvec, 0);
     initializeCoefs(dvec, numSpo);
   }
     
@@ -164,35 +164,35 @@ struct multi_UBspline<p, blocksize, 2> : public multi_UBspline_base<p,2> {
   }
 
   void pushCoefToDevice() {
-    Kokkos::deep_copy(single_coef, single_coef_mirrror);
+    Kokkos::deep_copy(single_coef, single_coef_mirror);
   }
  private:
   void initializeCoefs(std::vector<int>& dvec, int numSpo) {
     assert(dvec.size() == 2);
     std::vector<int> nx(dvec.begin(), dvec.end());
     
-    auto lbcMirror = Kokkos::create_mirror_view(left_bc_codes);
-    Kokkos::deep_copy(lbcMirror, left_bc_codes);
+    auto lbcMirror = Kokkos::create_mirror_view(this->left_bc_codes);
+    Kokkos::deep_copy(lbcMirror, this->left_bc_codes);
     for (int i = 0; i < 2; i++) {
       if (lbcMirror(i) == 0 || lbcMirror(i) == 5) {
-	sz[i] += 3;
+	nx[i] += 3;
       } else {
-	sz[i] += 2;
+	nx[i] += 2;
       }
     }    
-    coefs = coef_t("coefs", nx[0], nx[1], numSpo);
+    coef = coef_t("coefs", nx[0], nx[1], numSpo);
   }
 
 };
 
-template<precision p, int blocksize>
+template<typename p, int blocksize>
 struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
   using layout = Kokkos::LayoutRight;
   using coef_t = Kokkos::View<p****, layout>; // x, y, z, splines
   coef_t coef;
 
   using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), 0));
-  using single_coef_mirror_t = single_coef_t::HostMirror;
+  using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
 
@@ -202,7 +202,7 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
 
   void initialize(std::vector<int>& dvec, std::vector<double>& start,
 		  std::vector<double>& end, int bcCode, int numSpo) {
-    initializeBase(start, end, dvec, 0);
+    this->initialize_base(start, end, dvec, 0);
     initializeCoefs(dvec, numSpo);
   }
 
@@ -213,18 +213,20 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
   }
 
   void pushCoefToDevice() {
-    Kokkos::deep_copy(single_coef, single_coef_mirrror);
+    Kokkos::deep_copy(single_coef, single_coef_mirror);
   }
 
-  void evaluate_v(p x, p y, p z, Kokkos::View<p*> vals) {
-    assert(vals.extent(0) == coefs.extent(3));
-    doEval_v(x, y, z, vals, coefs, gridStarts, delta_invs, A44, blocksize);
+  template<typename valType>
+  void evaluate_v(p x, p y, p z, valType& vals) {
+    assert(vals.extent(0) == coef.extent(3));
+    doEval_v(x, y, z, vals, coef, this->gridStarts, this->delta_invs, A44, blocksize);
   }
 
-  void evaluate_vgh(p x, p y, p z, Kokkos::View<p*> vals, Kokkos::View<p*[3]> grad,
-		    Kokkos::View<p*[6]> hess) {
-    assert(vals.extent(0) == coefs.extent(3));
-    doEval_vgh(x, y, z, vals, grad, hess, coefs, gridStarts, delta_invs, A44, dA44, d2A44, blocksize);
+  template<typename valType, typename gradType, typename hessType>
+  void evaluate_vgh(p x, p y, p z, valType& vals, gradType& grad,
+		    hessType& hess) {
+    assert(vals.extent(0) == coef.extent(3));
+    doEval_vgh(x, y, z, vals, grad, hess, coef, this->gridStarts, this->delta_invs, A44, dA44, d2A44, blocksize);
   }
 
  private:
@@ -232,26 +234,26 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
     assert(dvec.size() == 3);
     std::vector<int> nx(dvec.begin(), dvec.end());
 
-    auto lbcMirror = Kokkos::create_mirror_view(left_bc_codes);
-    Kokkos::deep_copy(lbcMirror, left_bc_codes);
+    auto lbcMirror = Kokkos::create_mirror_view(this->left_bc_codes);
+    Kokkos::deep_copy(lbcMirror, this->left_bc_codes);
     for (int i = 0; i < 3; i++) {
       if (lbcMirror(i) == 0 || lbcMirror(i) == 5) {
-	sz[i] += 3;
+	nx[i] += 3;
       } else {
-	sz[i] += 2;
+	nx[i] += 2;
       }
     }    
-    coefs = coef_t("coefs", sz[0], sz[1], sz[2], numSpo);
+    coef = coef_t("coefs", nx[0], nx[1], nx[2], numSpo);
     initializeAs();
   }
 
   void initializeAs() {
     A44 = Kokkos::View<p[16]>("A44");
-    A44Mirror = Kokkos::create_mirror_view(A44);
+    auto A44Mirror = Kokkos::create_mirror_view(A44);
     dA44 = Kokkos::View<p[16]>("dA44");
-    dA44Mirror = Kokkos::create_mirror_view(dA44);
+    auto dA44Mirror = Kokkos::create_mirror_view(dA44);
     d2A44 = Kokkos::View<p[16]>("d2A44");
-    d2A44Mirror = Kokkos::create_mirror_view(d2A44);
+    auto d2A44Mirror = Kokkos::create_mirror_view(d2A44);
     
     p ta[16] = {
       -1.0 / 6.0, 3.0 / 6.0, -3.0 / 6.0, 1.0 / 6.0, 3.0 / 6.0, -6.0 / 6.0,
@@ -285,7 +287,7 @@ KOKKOS_INLINE_FUNCTION void compute_prefactors(Kokkos::Array<T,4>& a, T tx, view
 
 // would rather this be a member, but not sure how to 
 template<typename viewType, typename T>
-KOKKOS_INLINE_FUNCTION void compute_prefactors(Kokkos::Array<T,4>& a, Kokkos::Arrray<T,4>& da,
+KOKKOS_INLINE_FUNCTION void compute_prefactors(Kokkos::Array<T,4>& a, Kokkos::Array<T,4>& da,
 					       Kokkos::Array<T,4>& d2a, T tx,
 					       viewType A44, viewType dA44, viewType d2A44) {
   a[0]   = ((A44(0) * tx + A44(1)) * tx + A44(2)) * tx + A44(3);
@@ -313,24 +315,25 @@ KOKKOS_INLINE_FUNCTION void get(T x, T& dx, int& ind, int ng) {
 #undef MYMAX
 #undef MYMIN
 
-template<typename p>
-void doEval_v(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p****> coefs,
-	      Kokkos::View<double[3]> gridStarts, Kokkos::View<double[3]>delta_invs,
-	      Kokkos::View<p[16]> A44, int blockSize) {
+template<typename p, typename valType, typename coefType>
+void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
+	      Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
+	      Kokkos::View<p[16]>& A44, int blockSize) {
   int numBlocks = coefs.extent(4) / blockSize;
   if (coefs.extent(4) % blockSize != 0) {
     numBlocks++;
   }
 
-  Kokkos::Array<p,3> loc;
-  loc[0] = x;
-  loc[1] = y;
-  loc[2] = z;
   
   Kokkos::TeamPolicy<> policy(numBlocks,1,32);
-  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamPolicy<>::member_type member) {
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(Kokkos::TeamPolicy<>::member_type member) {
       const int start = blockSize * member.league_rank();
       int end = start + blockSize;
+
+      Kokkos::Array<p,3> loc;
+      loc[0] = x;
+      loc[1] = y;
+      loc[2] = z;
 
       if (end > coefs.extent(4)) {
 	end = coefs.extent(4);
@@ -351,13 +354,13 @@ void doEval_v(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p****> coefs,
       compute_prefactors(b, ts[1], A44);
       compute_prefactors(c, ts[2], A44);
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines),
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines),
 			   [&](const int& i) { vals(start+i) = p(); });
 
       for (int i = 0; i < 4; i++) {
 	for (int j = 0; j < 4; j++) {
 	  const p pre00 = a[i] * b[j];
-	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines), [&](const int& n) {
+	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
 	      vals[start+n] += pre00 * 
 		(c[0] * coefs(is[0]+i,is[1]+j,is[2],start+n) +
 		 c[1] * coefs(is[0]+i,is[1]+j,is[2]+1,start+n) +
@@ -369,27 +372,27 @@ void doEval_v(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p****> coefs,
     });      
 }
 
-template<typename p>
-void doEval_vgh(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p*[3]> grad,
-		Kokkos::View<p*[6]> hess, Kokkos::View<p****> coefs,
-		Kokkos::View<double[3]> gridStarts, Kokkos::View<double[3]>delta_invs,
-		Kokkos::View<p[16]> A44, Kokkos::View<p[16], dA44,
-		Kokkos::View<p[16]> d2A44, int blockSize = 32) {
+
+template<typename p, typename valType, typename gradType, typename hessType, typename coefType>
+void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
+		hessType& hess, coefType& coefs,
+		Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
+		Kokkos::View<p[16]>& A44, Kokkos::View<p[16]>& dA44,
+		Kokkos::View<p[16]>& d2A44, int blockSize) {
   int numBlocks = coefs.extent(4) / blockSize;
   if (coefs.extent(4) % blockSize != 0) {
     numBlocks++;
   }
-  
-  Kokkos::Array<p,3> loc;
-  loc[0] = x;
-  loc[1] = y;
-  loc[2] = z;
-  
+    
   Kokkos::TeamPolicy<> policy(numBlocks,1,32);
-  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamPolicy<>::member_type member) {
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(Kokkos::TeamPolicy<>::member_type member) {
       const int start = blockSize * member.league_rank();
       int end = start + blockSize;
-      
+
+      Kokkos::Array<p,3> loc;
+      loc[0] = x;
+      loc[1] = y;
+      loc[2] = z;
       if (end > coefs.extent(4)) {
 	end = coefs.extent(4);
       }
@@ -409,7 +412,7 @@ void doEval_vgh(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p*[3]> grad,
       compute_prefactors(b, db, d2b, ts[1], A44, dA44, d2A44);
       compute_prefactors(c, dc, d2c, ts[2], A44, dA44, d2A44);
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines), [&](const int& i) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& i) {
 	  vals(start+i) = p();
 	  grad(start+i,0) = p();
 	  grad(start+i,1) = p();
@@ -424,26 +427,26 @@ void doEval_vgh(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p*[3]> grad,
 
       for (int i = 0; i < 4; i++) {
 	for (int j = 0; j < 4; j++) {
-	  const p pre20 = d2a(i) * b(j);
-	  const p pre10 = da(i) * b(j);
-	  const p pre00 = a(i) * b(j);
-	  const p pre11 = da(i) * db(j);
-	  const p pre01 = a(i) * db(j);
-	  const p pre02 = a(i) * d2b(j);
+	  const p pre20 = d2a[i] * b[j];
+	  const p pre10 = da[i] * b[j];
+	  const p pre00 = a[i] * b[j];
+	  const p pre11 = da[i] * db[j];
+	  const p pre01 = a[i] * db[j];
+	  const p pre02 = a[i] * d2b[j];
 
-	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines), [&](const int& n) {
-	      const p sum0 = c(0) * coefs(is(0)+i, is(1)+j, is(2), start+n) +
-		c(1) * coefs(is(0)+i, is(1)+j, is(2)+1, start+n) +
-		c(2) * coefs(is(0)+i, is(1)+j, is(2)+2, start+n) +
-		c(3) * coefs(is(0)+i, is(1)+j, is(2)+3, start+n);
-	      const p sum1 = dc(0) * coefs(is(0)+i, is(1)+j, is(2), start+n) +
-		dc(1) * coefs(is(0)+i, is(1)+j, is(2)+1, start+n) +
-		dc(2) * coefs(is(0)+i, is(1)+j, is(2)+2, start+n) +
-		dc(3) * coefs(is(0)+i, is(1)+j, is(2)+3, start+n);
-	      const p sum2 = d2c(0) * coefs(is(0)+i, is(1)+j, is(2), start+n) +
-		d2c(1) * coefs(is(0)+i, is(1)+j, is(2)+1, start+n) +
-		d2c(2) * coefs(is(0)+i, is(1)+j, is(2)+2, start+n) +
-		d2c(3) * coefs(is(0)+i, is(1)+j, is(2)+3, start+n);
+	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
+	      const p sum0 = c[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
+		c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
+		c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
+		c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
+	      const p sum1 = dc[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
+		dc[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
+		dc[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
+		dc[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
+	      const p sum2 = d2c[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
+		d2c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
+		d2c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
+		d2c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
 	      
 	      hess(start+n,0) += pre20 * sum0;
 	      hess(start+n,1) += pre11 * sum0;
@@ -466,7 +469,7 @@ void doEval_vgh(p x, p y, p z, Kokoks::View<p*> vals, Kokkos::View<p*[3]> grad,
       const p dxz = delta_invs(0) * delta_invs(2);
       const p dyz = delta_invs(1) * delta_invs(2);
       
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, num_splines), [&](const int& n) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
 	  grad(start+n,0) *= delta_invs(0);
 	  grad(start+n,1) *= delta_invs(1);
 	  grad(start+n,2) *= delta_invs(2);
