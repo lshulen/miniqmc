@@ -413,18 +413,20 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
       compute_prefactors(c, dc, d2c, ts[2], A44, dA44, d2A44);
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& i) {
-	  vals(start+i) = p();
-	  grad(start+i,0) = p();
-	  grad(start+i,1) = p();
-	  grad(start+i,2) = p();
-	  hess(start+i,0) = p();
-	  hess(start+i,1) = p();
-	  hess(start+i,2) = p();
-	  hess(start+i,3) = p();
-	  hess(start+i,4) = p();
-	  hess(start+i,5) = p();
+	  const int spl = start + i;
+	  vals(spl) = p();
+	  grad(spl,0) = p();
+	  grad(spl,1) = p();
+	  grad(spl,2) = p();
+	  hess(spl,0) = p();
+	  hess(spl,1) = p();
+	  hess(spl,2) = p();
+	  hess(spl,3) = p();
+	  hess(spl,4) = p();
+	  hess(spl,5) = p();
 	});
 
+      std::cout << "Got here" << std::endl;
       for (int i = 0; i < 4; i++) {
 	for (int j = 0; j < 4; j++) {
 	  const p pre20 = d2a[i] * b[j];

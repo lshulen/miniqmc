@@ -80,6 +80,7 @@ struct einspline_spo : public SPOSet
   void set(int nx, int ny, int nz, int num_splines, bool init_random = true)
   { 
     nSplines         = num_splines;
+    resize();
     std::vector<int> ng{nx, ny, nz};
     std::vector<double> start(3,0);
     std::vector<double> end(3,0);
