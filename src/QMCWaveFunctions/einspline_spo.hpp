@@ -83,20 +83,33 @@ struct einspline_spo : public SPOSet
     resize();
     std::vector<int> ng{nx, ny, nz};
     std::vector<double> start(3,0);
-    std::vector<double> end(3,0);
+    std::vector<double> end(3,1);
 
     spline.initialize(ng, start, end, 0, nSplines);
     RandomGenerator<T> myrandom(11);
  
+    const int totalNumCoefs = spline.coef.extent(0)*spline.coef.extent(1)*spline.coef.extent(2);
+    T* mydata = new T[totalNumCoefs];
+
     if (init_random) {
       auto& locCoefData = spline.single_coef_mirror;
       for(int i = 0; i < nSplines; i++) {
 	spline.setSingleCoef(i);
 	// note, this could be a different order than in the other code
-	myrandom.generate_uniform(locCoefData.data(), locCoefData.extent(0)*locCoefData.extent(1)*locCoefData.extent(2));
+	myrandom.generate_uniform(mydata, totalNumCoefs);
+	int idx = 0;
+	for (int ix = 0; ix < locCoefData.extent(0); ix++) {
+	  for (int iy = 0; iy < locCoefData.extent(1); iy++) {
+	    for (int iz = 0; iz < locCoefData.extent(2); iz++) {
+	      locCoefData(ix,iy,iz) = mydata[idx];
+	      idx++;
+	    }
+	  }
+	}
 	spline.pushCoefToDevice();
       }
     }
+    delete[] mydata;
   }
 
   /** evaluate psi */

@@ -319,11 +319,10 @@ template<typename p, typename valType, typename coefType>
 void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
 	      Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
 	      Kokkos::View<p[16]>& A44, int blockSize) {
-  int numBlocks = coefs.extent(4) / blockSize;
-  if (coefs.extent(4) % blockSize != 0) {
+  int numBlocks = coefs.extent(3) / blockSize;
+  if (coefs.extent(3) % blockSize != 0) {
     numBlocks++;
   }
-
   
   Kokkos::TeamPolicy<> policy(numBlocks,1,32);
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(Kokkos::TeamPolicy<>::member_type member) {
@@ -335,8 +334,8 @@ void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
       loc[1] = y;
       loc[2] = z;
 
-      if (end > coefs.extent(4)) {
-	end = coefs.extent(4);
+      if (end > coefs.extent(3)) {
+	end = coefs.extent(3);
       }
       const int num_splines = end-start;
 
@@ -346,7 +345,7 @@ void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
       Kokkos::Array<p,3> ts;
       Kokkos::Array<int,3> is;
       for (int i = 0; i < 3; i++) {
-	get(loc[i] * delta_invs[i], ts[i], is[i], coefs.extent(i)-1);
+	get(loc[i] * delta_invs(i), ts[i], is[i], coefs.extent(i)-1);
       }
 
       Kokkos::Array<p,4> a,b,c;
@@ -361,11 +360,12 @@ void doEval_v(p x, p y, p z, valType& vals, coefType& coefs,
 	for (int j = 0; j < 4; j++) {
 	  const p pre00 = a[i] * b[j];
 	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
-	      vals[start+n] += pre00 * 
-		(c[0] * coefs(is[0]+i,is[1]+j,is[2],start+n) +
-		 c[1] * coefs(is[0]+i,is[1]+j,is[2]+1,start+n) +
-		 c[2] * coefs(is[0]+i,is[1]+j,is[2]+2,start+n) +
-		 c[3] * coefs(is[0]+i,is[1]+j,is[2]+3,start+n));
+	      const int sponum = start+n;
+	      vals(sponum) += pre00 * 
+		(c[0] * coefs(is[0]+i,is[1]+j,is[2],sponum) +
+		 c[1] * coefs(is[0]+i,is[1]+j,is[2]+1,sponum) +
+		 c[2] * coefs(is[0]+i,is[1]+j,is[2]+2,sponum) +
+		 c[3] * coefs(is[0]+i,is[1]+j,is[2]+3,sponum));
 	    });
 	}
       }
@@ -379,8 +379,8 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
 		Kokkos::View<double[3]>& gridStarts, Kokkos::View<double[3]>& delta_invs,
 		Kokkos::View<p[16]>& A44, Kokkos::View<p[16]>& dA44,
 		Kokkos::View<p[16]>& d2A44, int blockSize) {
-  int numBlocks = coefs.extent(4) / blockSize;
-  if (coefs.extent(4) % blockSize != 0) {
+  int numBlocks = coefs.extent(3) / blockSize;
+  if (coefs.extent(3) % blockSize != 0) {
     numBlocks++;
   }
     
@@ -388,14 +388,14 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(Kokkos::TeamPolicy<>::member_type member) {
       const int start = blockSize * member.league_rank();
       int end = start + blockSize;
+      if (end > coefs.extent(3)) {
+	end = coefs.extent(3);
+      }
 
       Kokkos::Array<p,3> loc;
       loc[0] = x;
       loc[1] = y;
       loc[2] = z;
-      if (end > coefs.extent(4)) {
-	end = coefs.extent(4);
-      }
       const int num_splines = end-start;
 
       for (int i = 0; i < 3; i++) {
@@ -426,7 +426,7 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
 	  hess(spl,5) = p();
 	});
 
-      std::cout << "Got here" << std::endl;
+      //std::cout << "Got here" << std::endl;
       for (int i = 0; i < 4; i++) {
 	for (int j = 0; j < 4; j++) {
 	  const p pre20 = d2a[i] * b[j];
@@ -437,29 +437,30 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
 	  const p pre02 = a[i] * d2b[j];
 
 	  Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
-	      const p sum0 = c[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
-		c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
-		c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
-		c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
-	      const p sum1 = dc[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
-		dc[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
-		dc[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
-		dc[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
-	      const p sum2 = d2c[0] * coefs(is[0]+i, is[1]+j, is[2], start+n) +
-		d2c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, start+n) +
-		d2c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, start+n) +
-		d2c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, start+n);
+	      const int sponum = start+n;
+	      const p sum0 = c[0] * coefs(is[0]+i, is[1]+j, is[2], sponum) +
+		c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, sponum) +
+		c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, sponum) +
+		c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, sponum);
+	      const p sum1 = dc[0] * coefs(is[0]+i, is[1]+j, is[2], sponum) +
+		dc[1] * coefs(is[0]+i, is[1]+j, is[2]+1, sponum) +
+		dc[2] * coefs(is[0]+i, is[1]+j, is[2]+2, sponum) +
+		dc[3] * coefs(is[0]+i, is[1]+j, is[2]+3, sponum);
+	      const p sum2 = d2c[0] * coefs(is[0]+i, is[1]+j, is[2], sponum) +
+		d2c[1] * coefs(is[0]+i, is[1]+j, is[2]+1, sponum) +
+		d2c[2] * coefs(is[0]+i, is[1]+j, is[2]+2, sponum) +
+		d2c[3] * coefs(is[0]+i, is[1]+j, is[2]+3, sponum);
 	      
-	      hess(start+n,0) += pre20 * sum0;
-	      hess(start+n,1) += pre11 * sum0;
-	      hess(start+n,2) += pre10 * sum1;
-	      hess(start+n,3) += pre02 * sum0;
-	      hess(start+n,4) += pre01 * sum1;
-	      hess(start+n,5) += pre00 * sum2;
-	      grad(start+n,0) += pre10 * sum0;
-	      grad(start+n,1) += pre01 * sum0;
-	      grad(start+n,2) += pre00 * sum1;
-	      vals(start+n) += pre00 * sum0;
+	      hess(sponum,0) += pre20 * sum0;
+	      hess(sponum,1) += pre11 * sum0;
+	      hess(sponum,2) += pre10 * sum1;
+	      hess(sponum,3) += pre02 * sum0;
+	      hess(sponum,4) += pre01 * sum1;
+	      hess(sponum,5) += pre00 * sum2;
+	      grad(sponum,0) += pre10 * sum0;
+	      grad(sponum,1) += pre01 * sum0;
+	      grad(sponum,2) += pre00 * sum1;
+	      vals(sponum) += pre00 * sum0;
 	    });
 	}
       }
@@ -472,15 +473,16 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
       const p dyz = delta_invs(1) * delta_invs(2);
       
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(member, num_splines), [&](const int& n) {
-	  grad(start+n,0) *= delta_invs(0);
-	  grad(start+n,1) *= delta_invs(1);
-	  grad(start+n,2) *= delta_invs(2);
-	  hess(start+n,0) *= dxx;
-	  hess(start+n,1) *= dyy;
-	  hess(start+n,2) *= dzz;
-	  hess(start+n,3) *= dxy;
-	  hess(start+n,4) *= dxz;
-	  hess(start+n,5) *= dyz;
+	  const int sponum = start+n;
+	  grad(sponum,0) *= delta_invs(0);
+	  grad(sponum,1) *= delta_invs(1);
+	  grad(sponum,2) *= delta_invs(2);
+	  hess(sponum,0) *= dxx;
+	  hess(sponum,1) *= dyy;
+	  hess(sponum,2) *= dzz;
+	  hess(sponum,3) *= dxy;
+	  hess(sponum,4) *= dxz;
+	  hess(sponum,5) *= dyz;
 	});
     });
  }
