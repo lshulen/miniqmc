@@ -156,7 +156,7 @@ int main(int argc, char** argv)
     OHMMS_PRECISION ratio = 0.0;
 
     //    using spo_type = einspline_spo<OHMMS_PRECISION>;
-    using spo_type = einspline_spo<OHMMS_PRECISION, 128>;
+    using spo_type = einspline_spo<OHMMS_PRECISION, 32>;
     spo_type spo_main;
     using spo_ref_type = miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>;
     spo_ref_type spo_ref_main;
@@ -190,6 +190,19 @@ int main(int argc, char** argv)
 
       spo_main.set(nx, ny, nz, norb);
       spo_main.Lattice.set(lattice_b);
+
+      auto& spline = spo_main.spline;
+      auto gridStartsMirror = Kokkos::create_mirror_view(spline.gridStarts);
+      Kokkos::deep_copy(gridStartsMirror, spline.gridStarts);
+      auto deltasMirror = Kokkos::create_mirror_view(spline.deltas);
+      Kokkos::deep_copy(deltasMirror, spline.deltas);
+      cout << "printing some spline stuff for debugging purposes" << endl;
+      for (int i = 0; i < 3; i++) {
+	cout << "   gridStarts(" << i << ") = " << gridStartsMirror(i) << endl;
+	cout << "   deltas(" << i << ") = " << deltasMirror(i) << endl;
+      }
+
+
       spo_ref_main.set(nx, ny, nz, norb, nTiles);
       spo_ref_main.Lattice.set(lattice_b);
     }

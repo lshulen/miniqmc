@@ -89,14 +89,15 @@ struct einspline_spo : public SPOSet
     RandomGenerator<T> myrandom(11);
  
     const int totalNumCoefs = spline.coef.extent(0)*spline.coef.extent(1)*spline.coef.extent(2);
-    T* mydata = new T[totalNumCoefs];
+    //T* mydata = new T[totalNumCoefs];
+    std::vector<T> mydata(totalNumCoefs);
 
     if (init_random) {
       auto& locCoefData = spline.single_coef_mirror;
       for(int i = 0; i < nSplines; i++) {
 	spline.setSingleCoef(i);
 	// note, this could be a different order than in the other code
-	myrandom.generate_uniform(mydata, totalNumCoefs);
+	myrandom.generate_uniform(&mydata[0], totalNumCoefs);
 	int idx = 0;
 	for (int ix = 0; ix < locCoefData.extent(0); ix++) {
 	  for (int iy = 0; iy < locCoefData.extent(1); iy++) {
@@ -109,7 +110,7 @@ struct einspline_spo : public SPOSet
 	spline.pushCoefToDevice();
       }
     }
-    delete[] mydata;
+    //delete[] mydata;
   }
 
   /** evaluate psi */
