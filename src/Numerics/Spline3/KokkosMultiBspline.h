@@ -25,8 +25,6 @@ void doEval_vgh(p x, p y, p z, valType& vals, gradType& grad,
 		Kokkos::View<p[16]>& A44, Kokkos::View<p[16]>& dA44,
 		Kokkos::View<p[16]>& d2A44, int blockSize = 32);
 
-
-
 template<typename p, int d>
 struct multi_UBspline_base {
   // for bc_codes, 0 == periodic, 1 == deriv1,   2 == deriv2
@@ -102,7 +100,7 @@ struct multi_UBspline<p, blocksize, 1> : public multi_UBspline_base<p,1> {
   using coef_t = Kokkos::View<p**, layout>; // x, splines
   coef_t coef;
 
-  using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), 0));
+  using single_coef_t = Kokkos::View<p*>;
   using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
@@ -113,13 +111,16 @@ struct multi_UBspline<p, blocksize, 1> : public multi_UBspline_base<p,1> {
     initializeCoefs(dvec, numSpo);
   }
   
-  void setSingleCoef(int i) {
-    assert(i >= 0 && i < coef.extent(1));
-    single_coef = Kokkos::subview(coef, Kokkos::ALL(), i);
-    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
-  }
-  void pushCoefToDevice() {
+  void pushCoefToDevice(int i) {
     Kokkos::deep_copy(single_coef, single_coef_mirror);
+    auto singleCoef = single_coef;
+    auto multiCoefs = coef;	
+    int spoNum = i;
+
+    Kokkos::parallel_for("pushCoefToMulti", coef.extent(0),
+	  		 KOKKOS_LAMBDA(const int& i0) {
+                            multiCoefs(i0,spoNum) = singleCoef(i0);
+                         }); 
   }
  private:
   void initializeCoefs(std::vector<int>& dvec, int numSpo) {
@@ -136,6 +137,8 @@ struct multi_UBspline<p, blocksize, 1> : public multi_UBspline_base<p,1> {
       }
     }
     coef = coef_t("coefs", nx[0], numSpo);
+    single_coef = single_coef_t("single_coef", nx[0]);
+    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
   }
 
 };
@@ -146,7 +149,7 @@ struct multi_UBspline<p, blocksize, 2> : public multi_UBspline_base<p,2> {
   using coef_t = Kokkos::View<p***, layout>; // x, y, splines
   coef_t coef;
 
-  using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), 0));
+  using single_coef_t = Kokkos::View<p**>;
   using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
@@ -157,14 +160,17 @@ struct multi_UBspline<p, blocksize, 2> : public multi_UBspline_base<p,2> {
     initializeCoefs(dvec, numSpo);
   }
     
-  void setSingleCoef(int i) {
-    assert(i >= 0 && i < coef.extent(2));
-    single_coef = Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), i);
-    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
-  }
-
-  void pushCoefToDevice() {
+  void pushCoefToDevice(int i) {
     Kokkos::deep_copy(single_coef, single_coef_mirror);
+    auto singleCoef = single_coef;
+    auto multiCoefs = coef;
+    int spoNum = i;
+
+    Kokkos::parallel_for("pushCoefToMulti", 
+			 Kokkos::MDRangePolicy<Kokkos::Rank<2,Kokkos::Iterate::Left> >({0,0}, {singleCoef.extent(0),singleCoef.extent(1)}),
+	  	         KOKKOS_LAMBDA(const int& i0, const int& i1) {
+			   multiCoefs(i0,i1,spoNum) = singleCoef(i0,i1);
+                         }); 
   }
  private:
   void initializeCoefs(std::vector<int>& dvec, int numSpo) {
@@ -181,6 +187,8 @@ struct multi_UBspline<p, blocksize, 2> : public multi_UBspline_base<p,2> {
       }
     }    
     coef = coef_t("coefs", nx[0], nx[1], numSpo);
+    single_coef = single_coef_t("single_coef", nx[0], nx[1]);
+    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
   }
 
 };
@@ -191,7 +199,7 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
   using coef_t = Kokkos::View<p****, layout>; // x, y, z, splines
   coef_t coef;
 
-  using single_coef_t = decltype(Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), 0));
+  using single_coef_t = Kokkos::View<p***>;
   using single_coef_mirror_t = typename single_coef_t::HostMirror;
   single_coef_t single_coef;
   single_coef_mirror_t single_coef_mirror;
@@ -206,14 +214,19 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
     initializeCoefs(dvec, numSpo);
   }
 
-  void setSingleCoef(int i) {
-    assert(i >= 0 && i < coef.extent(3));
-    single_coef = Kokkos::subview(coef, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), i);
-    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
-  }
-
-  void pushCoefToDevice() {
+  void pushCoefToDevice(int i) {
     Kokkos::deep_copy(single_coef, single_coef_mirror);
+    auto singleCoef = single_coef;
+    auto multiCoefs = coef;
+    int spoNum = i;
+
+    Kokkos::parallel_for("pushCoefToMulti", 
+			 Kokkos::MDRangePolicy<Kokkos::Rank<3,Kokkos::Iterate::Left> >({0,0,0}, {singleCoef.extent(0),singleCoef.extent(1),singleCoef.extent(2)}),
+	  	         KOKKOS_LAMBDA(const int& i0, const int& i1, const int& i2) {
+			   multiCoefs(i0,i1,i2,spoNum) = singleCoef(i0,i1,i2);
+                         }); 
+
+
   }
 
   template<typename valType>
@@ -244,6 +257,8 @@ struct multi_UBspline<p, blocksize, 3> : public multi_UBspline_base<p,3> {
       }
     }    
     coef = coef_t("coefs", nx[0], nx[1], nx[2], numSpo);
+    single_coef = single_coef_t("single_coef", nx[0], nx[1], nx[2]);
+    single_coef_mirror = Kokkos::create_mirror_view(single_coef);
     initializeAs();
   }
 

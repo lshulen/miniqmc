@@ -95,7 +95,6 @@ struct einspline_spo : public SPOSet
     if (init_random) {
       auto& locCoefData = spline.single_coef_mirror;
       for(int i = 0; i < nSplines; i++) {
-	spline.setSingleCoef(i);
 	// note, this could be a different order than in the other code
 	myrandom.generate_uniform(&mydata[0], totalNumCoefs);
 	int idx = 0;
@@ -107,7 +106,7 @@ struct einspline_spo : public SPOSet
 	    }
 	  }
 	}
-	spline.pushCoefToDevice();
+	spline.pushCoefToDevice(i);
       }
     }
     //delete[] mydata;
