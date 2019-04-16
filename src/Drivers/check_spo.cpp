@@ -129,7 +129,7 @@ int main(int argc, char** argv)
         case 'V':
           print_version(true);
           return 1;
-          break;
+	  //          break;
         default:
           print_help();
         }
@@ -191,6 +191,7 @@ int main(int argc, char** argv)
       spo_main.set(nx, ny, nz, norb);
       spo_main.Lattice.set(lattice_b);
 
+      /*
       auto& spline = spo_main.spline;
       auto gridStartsMirror = Kokkos::create_mirror_view(spline.gridStarts);
       Kokkos::deep_copy(gridStartsMirror, spline.gridStarts);
@@ -201,10 +202,34 @@ int main(int argc, char** argv)
 	cout << "   gridStarts(" << i << ") = " << gridStartsMirror(i) << endl;
 	cout << "   deltas(" << i << ") = " << deltasMirror(i) << endl;
       }
-
+      
+      auto coefMirror = Kokkos::create_mirror_view(spline.coef);
+      Kokkos::deep_copy(coefMirror, spline.coef);
+      cout << "   coef(2,2,0,0) = " << coefMirror(2,2,0,0) << endl;
+      cout << "   coef(2,0,2,0) = " << coefMirror(2,0,2,0) << endl;
+      cout << "   coef(0,2,2,0) = " << coefMirror(0,2,2,0) << endl;
+      PosType p;
+      p[0] = 0.2;
+      p[1] = 0.4;
+      p[2] = 0.7;
+      spo_main.evaluate_v(p);
+      cout << "   doing evaluate v with position: (" << p[0] << ", " << p[1] << ", " <<  p[2] << ")" << endl;
+      auto psiMirror = Kokkos::create_mirror_view(spo_main.psi);
+      Kokkos::deep_copy(psiMirror, spo_main.psi);
+      cout << "      psi[0] = " << psiMirror(0) << ", psi[4] = " << psiMirror(4) << endl;
+      */
 
       spo_ref_main.set(nx, ny, nz, norb, nTiles);
       spo_ref_main.Lattice.set(lattice_b);
+      /*    
+      cout << "   looking at the reference version:" << endl;
+      cout << "   coef(2,2,0,0) = " << spo_ref_main.einsplines(0).coefs_view(2,2,0,0) << endl;
+      cout << "   coef(2,0,2,0) = " << spo_ref_main.einsplines(0).coefs_view(2,0,2,0) << endl;
+      cout << "   coef(0,2,2,0) = " << spo_ref_main.einsplines(0).coefs_view(0,2,2,0) << endl;
+      spo_ref_main.evaluate_v(p);
+      cout << "   doing evaluate v with position: (" << p[0] << ", " << p[1] << ", " <<  p[2] << ")" << endl;
+      cout << "      psi[0] = " << spo_ref_main.psi(0).operator()(0) << ", psi[4] = " << spo_ref_main.psi(0).operator()(4) << endl;
+      */
     }
 
     double nspheremoves = 0;
