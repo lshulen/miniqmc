@@ -403,13 +403,16 @@ int main(int argc, char** argv)
       const int teamID = partition_id;
       Timers[Timer_Init]->start();
       // create and initialize movers
+      std::cerr << "Making a mover...\n";
       Mover thiswalker(myPrimes[teamID], ions);
       // create a spo view in each Mover
+      std::cerr << "Making the spo for this mover...\n";
       thiswalker.spo = build_SPOSet_view(useRef, spo_main, team_size, teamID);
 
       // create wavefunction per mover
+      std::cerr << "Making the wave function for this mover...\n";
       build_WaveFunction(useRef, thiswalker.wavefunction, ions, thiswalker.els, thiswalker.rng, enableJ3);
-
+      std::cerr << "Finished making stuff for this mover...\n";
       // initial computing
       thiswalker.els.update();
       thiswalker.wavefunction.evaluateLog(thiswalker.els);

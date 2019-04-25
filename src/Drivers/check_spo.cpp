@@ -57,7 +57,6 @@ int main(int argc, char** argv)
   Kokkos::initialize(argc, argv);
   { //Begin kokkos block.
 
-
     // clang-format off
     typedef QMCTraits::RealType           RealType;
     typedef ParticleSet::ParticlePos_t    ParticlePos_t;
@@ -188,8 +187,10 @@ int main(int argc, char** argv)
       app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
                     << SPO_coeff_size_MB << " MB)" << endl;
 
+      std::cout << "Setting up the Kokkos implementation...";
       spo_main.set(nx, ny, nz, norb);
       spo_main.Lattice.set(lattice_b);
+      std::cout << "Done." << std::endl;
 
       /*
       auto& spline = spo_main.spline;
@@ -219,13 +220,20 @@ int main(int argc, char** argv)
       cout << "      psi[0] = " << psiMirror(0) << ", psi[4] = " << psiMirror(4) << endl;
       */
 
+      // REF
+      std::cout << "Setting up the reference implementation...";
       spo_ref_main.set(nx, ny, nz, norb, nTiles);
       spo_ref_main.Lattice.set(lattice_b);
-      /*    
+      std::cout << "Done." << std::endl;
+
+      /*
       cout << "   looking at the reference version:" << endl;
-      cout << "   coef(2,2,0,0) = " << spo_ref_main.einsplines(0).coefs_view(2,2,0,0) << endl;
-      cout << "   coef(2,0,2,0) = " << spo_ref_main.einsplines(0).coefs_view(2,0,2,0) << endl;
-      cout << "   coef(0,2,2,0) = " << spo_ref_main.einsplines(0).coefs_view(0,2,2,0) << endl;
+      intptr_t xs = spo_ref_main.einsplines(0).x_stride;
+      intptr_t ys = spo_ref_main.einsplines(0).y_stride;
+      intptr_t zs = spo_ref_main.einsplines(0).z_stride;
+      cout << "   coef(2,2,0,0) = " << spo_ref_main.einsplines(0).coefs[xs*2+ys*2+0*zs] << endl;
+      cout << "   coef(2,0,2,0) = " << spo_ref_main.einsplines(0).coefs[xs*2+ys*0+zs*2] << endl;
+      cout << "   coef(0,2,2,0) = " << spo_ref_main.einsplines(0).coefs[xs*0+ys*2+zs*2] << endl;
       spo_ref_main.evaluate_v(p);
       cout << "   doing evaluate v with position: (" << p[0] << ", " << p[1] << ", " <<  p[2] << ")" << endl;
       cout << "      psi[0] = " << spo_ref_main.psi(0).operator()(0) << ", psi[4] = " << spo_ref_main.psi(0).operator()(4) << endl;
@@ -300,30 +308,30 @@ int main(int argc, char** argv)
           spo_ref.evaluate_vgh(pos);
           // accumulate error
 
-	  auto psiView = Kokkos::create_mirror_view(spo_main.psi);
-	  auto gradView = Kokkos::create_mirror_view(spo_main.grad);
-	  auto hessView = Kokkos::create_mirror_view(spo_main.hess);
-	  Kokkos::deep_copy(psiView, spo_main.psi);
-	  Kokkos::deep_copy(gradView, spo_main.grad);
-	  Kokkos::deep_copy(hessView, spo_main.hess);
+	  auto psi_host  = Kokkos::create_mirror_view(spo_main.psi);
+	  auto grad_host = Kokkos::create_mirror_view(spo_main.grad);
+	  auto hess_host = Kokkos::create_mirror_view(spo_main.hess);
+	  Kokkos::deep_copy(psi_host,  spo_main.psi);
+	  Kokkos::deep_copy(grad_host, spo_main.grad);
+	  Kokkos::deep_copy(hess_host, spo_main.hess);
 	  
           for (int ib = 0; ib < spo_ref.nBlocks; ib++)
             for (int n = 0; n < spo_ref.nSplinesPerBlock; n++)
             {
 	      int spNum = ib*spo_ref.nSplinesPerBlock+n;
               // value
-	      evalVGH_v_err += std::fabs(psiView(spNum) - spo_ref.psi[ib][n]);
+	      evalVGH_v_err += std::fabs(psi_host(spNum) - spo_ref.psi[ib][n]);
               // grad
-	      evalVGH_g_err += std::fabs(gradView(spNum, 0) - spo_ref.grad[ib](n, 0));
-	      evalVGH_g_err += std::fabs(gradView(spNum, 1) - spo_ref.grad[ib](n, 1));
-	      evalVGH_g_err += std::fabs(gradView(spNum, 2) - spo_ref.grad[ib](n, 2));
+	      evalVGH_g_err += std::fabs(grad_host(spNum, 0) - spo_ref.grad[ib].data(0)[n]);
+	      evalVGH_g_err += std::fabs(grad_host(spNum, 1) - spo_ref.grad[ib].data(1)[n]);
+	      evalVGH_g_err += std::fabs(grad_host(spNum, 2) - spo_ref.grad[ib].data(2)[n]);
               // hess
-	      evalVGH_h_err += std::fabs(hessView(spNum, 0) - spo_ref.hess[ib](n, 0));
-	      evalVGH_h_err += std::fabs(hessView(spNum, 1) - spo_ref.hess[ib](n, 1));
-	      evalVGH_h_err += std::fabs(hessView(spNum, 2) - spo_ref.hess[ib](n, 2));
-	      evalVGH_h_err += std::fabs(hessView(spNum, 3) - spo_ref.hess[ib](n, 3));
-	      evalVGH_h_err += std::fabs(hessView(spNum, 4) - spo_ref.hess[ib](n, 4));
-	      evalVGH_h_err += std::fabs(hessView(spNum, 5) - spo_ref.hess[ib](n, 5));
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 0) - spo_ref.hess[ib].data(0)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 1) - spo_ref.hess[ib].data(1)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 2) - spo_ref.hess[ib].data(2)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 3) - spo_ref.hess[ib].data(3)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 4) - spo_ref.hess[ib].data(4)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 5) - spo_ref.hess[ib].data(5)[n]);
             }
           if (ur[iel] > accept)
           {
@@ -350,12 +358,12 @@ int main(int argc, char** argv)
               //spo.evaluate_v(pos);
               spo_ref.evaluate_v(pos);
               // accumulate error
-	      auto psiView = Kokkos::create_mirror_view(spo_main.psi);
-	      Kokkos::deep_copy(psiView, spo_main.psi);
+	      auto psi_host = Kokkos::create_mirror_view(spo_main.psi);
+	      Kokkos::deep_copy(psi_host, spo_main.psi);
 	      
               for (int ib = 0; ib < spo_ref.nBlocks; ib++)
                 for (int n = 0; n < spo_ref.nSplinesPerBlock; n++)
-		  evalV_v_err += std::fabs(psiView(ib*spo_ref.nSplinesPerBlock+n) - spo_ref.psi[ib][n]);
+		  evalV_v_err += std::fabs(psi_host(ib*spo_ref.nSplinesPerBlock+n) - spo_ref.psi[ib][n]);
             }
           } // els
         }   // ions
