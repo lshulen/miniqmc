@@ -220,17 +220,20 @@ int main(int argc, char** argv)
       cout << "      psi[0] = " << psiMirror(0) << ", psi[4] = " << psiMirror(4) << endl;
       */
 
-      // @DEBUG: problem is in here
+      // REF
       std::cout << "Setting up the reference implementation...";
       spo_ref_main.set(nx, ny, nz, norb, nTiles);
       spo_ref_main.Lattice.set(lattice_b);
       std::cout << "Done." << std::endl;
 
-      /*    
+      /*
       cout << "   looking at the reference version:" << endl;
-      cout << "   coef(2,2,0,0) = " << spo_ref_main.einsplines(0).coefs_view(2,2,0,0) << endl;
-      cout << "   coef(2,0,2,0) = " << spo_ref_main.einsplines(0).coefs_view(2,0,2,0) << endl;
-      cout << "   coef(0,2,2,0) = " << spo_ref_main.einsplines(0).coefs_view(0,2,2,0) << endl;
+      intptr_t xs = spo_ref_main.einsplines(0).x_stride;
+      intptr_t ys = spo_ref_main.einsplines(0).y_stride;
+      intptr_t zs = spo_ref_main.einsplines(0).z_stride;
+      cout << "   coef(2,2,0,0) = " << spo_ref_main.einsplines(0).coefs[xs*2+ys*2+0*zs] << endl;
+      cout << "   coef(2,0,2,0) = " << spo_ref_main.einsplines(0).coefs[xs*2+ys*0+zs*2] << endl;
+      cout << "   coef(0,2,2,0) = " << spo_ref_main.einsplines(0).coefs[xs*0+ys*2+zs*2] << endl;
       spo_ref_main.evaluate_v(p);
       cout << "   doing evaluate v with position: (" << p[0] << ", " << p[1] << ", " <<  p[2] << ")" << endl;
       cout << "      psi[0] = " << spo_ref_main.psi(0).operator()(0) << ", psi[4] = " << spo_ref_main.psi(0).operator()(4) << endl;
@@ -325,10 +328,10 @@ int main(int argc, char** argv)
               // hess
 	      evalVGH_h_err += std::fabs(hess_host(spNum, 0) - spo_ref.hess[ib].data(0)[n]);
 	      evalVGH_h_err += std::fabs(hess_host(spNum, 1) - spo_ref.hess[ib].data(1)[n]);
-	      evalVGH_h_err += std::fabs(hess_host(spNum, 2) - spo_ref.hess[ib].data(3)[n]);
-	      evalVGH_h_err += std::fabs(hess_host(spNum, 3) - spo_ref.hess[ib].data(4)[n]);
-	      evalVGH_h_err += std::fabs(hess_host(spNum, 4) - spo_ref.hess[ib].data(5)[n]);
-	      evalVGH_h_err += std::fabs(hess_host(spNum, 5) - spo_ref.hess[ib].data(6)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 2) - spo_ref.hess[ib].data(2)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 3) - spo_ref.hess[ib].data(3)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 4) - spo_ref.hess[ib].data(4)[n]);
+	      evalVGH_h_err += std::fabs(hess_host(spNum, 5) - spo_ref.hess[ib].data(5)[n]);
             }
           if (ur[iel] > accept)
           {

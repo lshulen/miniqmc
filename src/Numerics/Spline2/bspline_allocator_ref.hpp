@@ -113,6 +113,8 @@ public:
   void copy(UBT* single, MBT* multi, int i, const int* offset, const int* N);
 };
 
+
+  // @DEBUG: JPT ref calls this one
 template<typename T>
 void Allocator::setCoefficientsForOneOrbital(int i,
                                              Array<T, 3>& coeff,
@@ -120,18 +122,19 @@ void Allocator::setCoefficientsForOneOrbital(int i,
 {
   //#pragma omp parallel for collapse(3)
   for (int ix = 0; ix < spline->x_grid.num + 3; ix++)
-  {
-    for (int iy = 0; iy < spline->y_grid.num + 3; iy++)
     {
-      for (int iz = 0; iz < spline->z_grid.num + 3; iz++)
-      {
-        intptr_t xs                                    = spline->x_stride;   // These might be unset
-        intptr_t ys                                    = spline->y_stride;
-        intptr_t zs                                    = spline->z_stride;
-        spline->coefs[ix * xs + iy * ys + iz * zs + i] = coeff(ix, iy, iz);
-      }
+      for (int iy = 0; iy < spline->y_grid.num + 3; iy++)
+	{
+	  for (int iz = 0; iz < spline->z_grid.num + 3; iz++)
+	    {
+	      intptr_t xs        = spline->x_stride;
+	      intptr_t ys        = spline->y_stride;
+	      intptr_t zs        = spline->z_stride;
+	      int     idx        = ix * xs + iy * ys + iz * zs + i;
+	      spline->coefs[idx] = coeff(ix, iy, iz);
+	    }
+	}
     }
-  }
 }
 
   // @DEBUG JPT: ref impl calls this one
