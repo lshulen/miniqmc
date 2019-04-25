@@ -59,7 +59,8 @@ struct einspline_spo : public SPOSet
     timer = TimerManager.createTimer("Single-Particle Orbitals", timer_level_fine);
   }
   /// disable copy constructor
-  einspline_spo(const einspline_spo& in) = default;
+  einspline_spo(const einspline_spo& in) = delete;
+
   /// disable copy operator
   einspline_spo& operator=(const einspline_spo& in) = delete;
 
